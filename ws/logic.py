@@ -1,3 +1,4 @@
+import requests
 import sys
 from pathlib import Path
 # Allow usage of API's code
@@ -8,9 +9,8 @@ from utils import id_generator, checks, redis
 from json import loads
 from models.events import Event
 
-def make_redis():
-    global redis
-    redis = redis.RDB
+def get_redis():
+    return redis.RDB
 
 class FormatError(Exception):
     def __init__(self, message):            
@@ -39,9 +39,10 @@ def format_auth_handshake(raw_data, delim: str = ":"):
         return False, None
     return split[0], split[1]
 
+
 class DBConn:
     def __init__(self, db):
-        make_redis()
+        self.redis = get_redis()
         db.DB_CONFIG_PATH = f"../{db.DB_CONFIG_PATH}"
         self.db = db.DB(db.mariadb_pool(0)) # Create the connection to the DB
 
@@ -57,7 +58,7 @@ class DBConn:
         if _id == False or _auth == None:
             await connection.send("Bad token.")
             return None
-        if checks.authenticated(_auth, redis.get(_id)) != True:
+        if checks.authenticated(_auth, self.redis.get(_id)) != True:
             await connection.send("Bad token.")
             return None
         return _id
@@ -85,4 +86,4 @@ class DBConn:
         timestamp = datetime.now().timestamp()
 
         self.db.execute(query, _id, event.conn_ref, dmID if dmID != None else event.destination, event.data["content"], timestamp)
-c
+        return None, None

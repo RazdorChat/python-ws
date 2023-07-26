@@ -18,29 +18,32 @@ class Node:
         self.message_queue = Queue()
 
 
-    async def broadcast(self, data, connections):
+    async def broadcast(self, data, connections) -> None:
         """ Send received events"""
         websockets.broadcast(connections, data)
 
 
-    async def conn_recv_handler(self, connection, reference, db_conn: logic.DBConn):
+    async def conn_recv_handler(self, connection, reference, db_conn: logic.DBConn) -> None:
         """ Receive incoming events """
         while connection.closed != True:
-            data = await connection.recv()
+            try:
+                data = await connection.recv()
 
-            if checks.is_valid_event(data):
-                event = logic.format_event(data, reference)
-                error, msg = await db_conn.callables[event.event](event)
-                if error == True:
-                    await connection.send('event: error\ndata: {"error": "REPLACETHIS"}'.replace("REPLACETHIS", msg, 1))
-                    pass
+                if checks.is_valid_event(data):
+                    event = logic.format_event(data, reference)
+                    error, msg = await db_conn.callables[event.event](event)
+                    if error == True:
+                        await connection.send('event: error\ndata: {"error": "REPLACETHIS"}'.replace("REPLACETHIS", msg, 1))
+                        pass
+                    else:
+                        # TODO: appropriate logic for handling DB changes
+                        print(f"\nBroadcasting incoming event ({event.event})\n")
+                        del event
+                        conns = [value for key,value in self.connections.connections.items()]
+                        await self.broadcast(data, conns) # TODO: logic for getting correct connections based on reference
+                        pass
                 else:
-                    # TODO: appropriate logic for handling DB changes
-                    print(f"\nBroadcasting incoming event ({event.event})\n")
-                    del event
-                    conns = [value for key,value in self.connections.connections.items()]
-                    await self.broadcast(data, conns) # TODO: logic for getting correct connections based on reference
+                    print("Invalid event")
                     pass
-            else:
-                print("Invalid event")
+            except websockets.exceptions.ConnectionClosedError or websockets.exceptions.ConnectionClosedOK:
                 pass
