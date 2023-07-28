@@ -41,7 +41,7 @@ def format_auth_handshake(raw_data, delim: str = ":"):
 
 
 class DBConn:
-    def __init__(self, db):
+    def __init__(self, db, secret):
         self.redis = get_redis()
         db.DB_CONFIG_PATH = f"../{db.DB_CONFIG_PATH}"
         self.db = db.DB(db.mariadb_pool(0)) # Create the connection to the DB
@@ -49,16 +49,19 @@ class DBConn:
         self.callables = { # Easy way out for calling the correct code for the correct event
             "new_message": self.save_new_message
         }
+        self.secret = secret
 
     async def auth_handshake(self, connection):
         await connection.send("event: identify\ndata: None")
         data = await connection.recv()
         _id, _auth = format_auth_handshake(data)
         del data
+        if str(_id) == str(self.secret): # Another Node
+            return _id
         if _id == False or _auth == None:
             await connection.send("Bad token.")
             return None
-        if checks.authenticated(_auth, self.redis.get(_id)) != True:
+        elif checks.authenticated(_auth, self.redis.get(_id)) != True:
             await connection.send("Bad token.")
             return None
         return _id

@@ -10,6 +10,8 @@ from utils import db
 
 # TODO: get the API's url
 API_URL = "http://localhost:42042/api/nodes"
+ADDR = "localhost"
+PORT = 8001
 
 print("-----    Starting WS Server    -----.\n")
 
@@ -21,68 +23,85 @@ except FileNotFoundError:
     exit(0)
 
 print("Connecting to DB")
-_db = logic.DBConn(db) # Create the connection to the DB
+_db = logic.DBConn(db, secret) # Create the connection to the DB
 print("Connected")
 
-current_node = node.Node(1) # TODO: limit conns to 10k/15k, redirect to another node at limit.
-api = connection.ApiConnection(_db, API_URL, secret, current_node)
+api = connection.ApiConnection(_db, API_URL, secret, None)
+print(f"{api.get_node_addrs()} other nodes running")
+current_node = node.Node(f"{ADDR}:{PORT}", db=_db) # TODO: redirect to another node at limit.
+api.insert_node(current_node)
 
 async def handler(connection):
     """ Handles a single WS connection. """
     global AT_LIMIT
-    if AT_LIMIT:
-        print("<<< Auto-Closing ")
-        return
-    
-    print(f">>> Incoming Connection")
-
-    if len(current_node.connections.connections) >= current_node.connections.limit:
-        AT_LIMIT = True
-        api.notify_at_limit()
-        print("<<< Closing connection (at limit)")
-        return
-
+    forwarding = False
     reference = await _db.auth_handshake(connection)
     if reference == None:
         await connection.close()
+    elif len(current_node.connections.connections) >= current_node.limit:
+        AT_LIMIT = True
 
-    print(f"<<< Accepting Connection ({reference})")
+    if AT_LIMIT and reference != secret: # Accept other node connections even if at limit
+        print("<<< Auto-Closing ")
+        return
+    elif reference == secret:
+        forwarding = True
+    print(f">>> Incoming Connection")
+
+    print(f"<<< Accepting Connection")
     await connection.send("event: confirmed\ndata: None")
 
-    current_node.connections.register(reference, connection) # Register connection
+    if not forwarding:
+        current_node.connections.register(reference, connection) # Register connection
+    elif forwarding:
+        print(">>> Forwarding")
+        reference == await connection.recv() # Get actual reference from forwarding Node
+        data = await connection.recv()
+        current_node.broadcast(data, current_node.connections.connections.keys()) # Forward the event to all connections
+        del data
+
+        return # Close the connection
     
-    asyncio.create_task(current_node.conn_recv_handler(connection, reference, _db))
+    asyncio.create_task(current_node.conn_recv_handler(connection, reference, _db, secret)) # Receive events
     await connection.wait_closed() # Wait until connection closes
 
     current_node.connections.unregister(reference) # Unregister connection
     print(f">>> Closed connection ({reference})\n")
+    return
 
 async def main():
     print("\n-----    Started WS Server    -----.\n")
     print("Registering to API")
-    if api.register_to_api("localhost", 8001) == True:
+    if api.register_to_api(ADDR, PORT) == True:
         print("Registered.")
     else:
         print("Error registering to API...")
     print("Starting API cache loop\n")
     global cache_loop
     cache_loop = asyncio.create_task(api.refresh_nodes())
-    print(f"Current node: {current_node.name}")
-    async with websockets.serve(handler, "localhost", 8001):
+    print(f"Current info: {current_node.name}")
+    async with websockets.serve(handler, ADDR, PORT, compression=None, ping_interval=30): # Disable compression at cost of network bandwidth
         await asyncio.Future()  # run forever
+
+def cleanup_before_exit():
+    print("\n----    Exiting    -----\n")
+    print("Closing DB connection...")
+    _db.db.pool.close()
+    print("Unregistering from API...")
+    api.unregister_from_api()
+    print("Closing cache task...")
+    cache_loop.cancel()
+    print("Done.")
 
 
 if __name__ == "__main__":
     global AT_LIMIT
     AT_LIMIT = False
     try:
-        asyncio.run(main())
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            cleanup_before_exit()
     except KeyboardInterrupt:
-        print("\n----    Exiting    -----\n")
-        print("Closing DB connection...")
-        _db.db.pool.close()
-        print("Unregistering from API...")
-        api.unregister_from_api()
-        print("Closing cache task...")
-        cache_loop.cancel()
-        print("Done.")
+        print("Stop trying to force exit, attemping cleaning again...")
+        cleanup_before_exit()

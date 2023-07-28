@@ -11,11 +11,16 @@ from utils import checks
 
 
 class Node:
-    def __init__(self, id: int, name: str = None):
+    def __init__(self, id: int, db: object, name: str = None):
         self.id = id # Nodes ID
-        self.name = name if name != None else f"Node-{id}"
+        self.db = db
+        self.__name = name
         self.connections = connection.Connections()
         self.message_queue = Queue()
+
+    @property
+    def name(self):
+        return self.__name if self.__name != None else self.id
 
 
     async def broadcast(self, data, connections) -> None:
@@ -23,17 +28,17 @@ class Node:
         websockets.broadcast(connections, data)
 
 
-    async def conn_recv_handler(self, connection, reference, db_conn: logic.DBConn) -> None:
+    async def conn_recv_handler(self, _connection, reference, db_conn: logic.DBConn, secret: str = None) -> None:
         """ Receive incoming events """
-        while connection.closed != True:
+        while _connection.closed != True:
             try:
-                data = await connection.recv()
+                data = await _connection.recv()
 
                 if checks.is_valid_event(data):
                     event = logic.format_event(data, reference)
-                    error, msg = await db_conn.callables[event.event](event)
+                    error, msg = await db_conn.callables[event.event](event) # Process event
                     if error == True:
-                        await connection.send('event: error\ndata: {"error": "REPLACETHIS"}'.replace("REPLACETHIS", msg, 1))
+                        await _connection.send('event: error\ndata: {"error": "REPLACETHIS"}'.replace("REPLACETHIS", msg, 1))
                         pass
                     else:
                         # TODO: appropriate logic for handling DB changes
