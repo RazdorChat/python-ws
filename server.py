@@ -36,7 +36,10 @@ async def handler(connection):
 	print(f">>> Incoming Connection")
 	global AT_LIMIT
 	forwarding = False
-	reference = await _db.auth_handshake(connection)
+	try:
+		reference = await _db.auth_handshake(connection)
+	except websockets.exceptions.ConnectionClosedError or websockets.exceptions.ConnectionClosedOK:
+		return
 	if reference == None:
 		await connection.close()
 	elif len(current_node.connections.connections) >= current_node.connections.limit:
