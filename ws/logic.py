@@ -54,7 +54,7 @@ class DBConn:
 	async def auth_handshake(self, connection):
 		await connection.send("event: identify\ndata: None")
 		data = await connection.recv()
-		_id, _auth = format_auth_handshake(data)
+		_id, _auth = format_auth_handshake(data) # userID:access_token
 		del data
 		if str(_id) == str(self.secret): # Another Node
 			return _id
