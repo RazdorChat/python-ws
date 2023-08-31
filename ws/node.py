@@ -11,12 +11,12 @@ from utils import checks
 
 
 class Node:
-	def __init__(self, id: int, db: object, name: str = None):
+	def __init__(self, id: int, db: object, hostname: str, name: str = None):
 		self.id = id # Nodes ID
 		self.db = db
+		self.hostname = hostname
 		self.__name = name
 		self.connections = connection.Connections()
-		self.message_queue = Queue()
 
 	@property
 	def name(self):

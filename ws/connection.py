@@ -9,13 +9,14 @@ class ForwardConnection:
 		self.msg = msg
 		self.reference = reference
 		self.secret = secret
+		self.conn = websockets.connect(f"ws://{self.url}")
 
 	async def forward(self):
-		async with websockets.connect(f"ws://{self.url}") as websocket:
-			await websocket.send(f"{self.secret}:None")
-			await websocket.send(self.reference)
-			await websocket.send(self.msg)
-			
+		await self.conn.send(f"{self.secret}:None")
+		await self.conn.send(self.reference)
+		await self.conn.send(self.msg)
+		await self.conn.close()
+		
 
 
 class ApiConnection:
@@ -23,7 +24,7 @@ class ApiConnection:
 		self.api_url = api_url
 		self.db = db
 		self.secret = secret
-		self.node = None
+		self.node = node
 		self.redis = db.redis
 
 	def insert_node(self, node_object: object):
@@ -33,6 +34,7 @@ class ApiConnection:
 		""" Adds the Node to the API's node list """
 		data = {
 			"name": self.node.name,
+			"hostname": self.node.hostname,
 			"id": self.node.id,
 			"addr": addr,
 			"port": port,

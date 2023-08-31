@@ -7,11 +7,7 @@ sys.path.append(str(Path(__file__).parent / '../../'))
 
 from ws import node, logic, connection
 from utils import db
-
-# TODO: get the API's url
-API_URL = "http://localhost:42042/api/nodes"
-ADDR = "localhost"
-PORT = 8001
+from ws import config
 
 print("-----    Starting WS Server    -----.\n")
 
@@ -26,9 +22,9 @@ print("Connecting to DB")
 _db = logic.DBConn(db, secret) # Create the connection to the DB
 print("Connected")
 
-api = connection.ApiConnection(_db, API_URL, secret, None)
+api = connection.ApiConnection(_db, config.api_url, secret, None)
 print(f"{api.get_node_addrs()} other nodes running")
-current_node = node.Node(f"{ADDR}:{PORT}", db=_db) # TODO: redirect to another node at limit.
+current_node = node.Node(f"{config.ip}:{config.port}", db=_db) # TODO: redirect to another node at limit.
 api.insert_node(current_node)
 
 async def handler(connection):
@@ -60,11 +56,8 @@ async def handler(connection):
 		print(">>> Forwarding from other Node")
 		reference == await connection.recv() # Get actual reference from forwarding Node
 		data = await connection.recv()
-		conns = [value for key,value in current_node.connections.connections.items()]
 		event = logic.format_event(data, reference)
 		await current_node.broadcast(data, event, reference) # Forward the event to all connections
-		del data
-
 		return # Close the connection
 	try:
 		asyncio.create_task(current_node.conn_recv_handler(connection, reference, _db, secret)) # Receive events
@@ -81,15 +74,15 @@ async def handler(connection):
 async def main():
 	print("\n-----    Started WS Server    -----.\n")
 	print("Registering to API")
-	if api.register_to_api(ADDR, PORT) == True:
+	if api.register_to_api(config.hostname, config.port) == True:
 		print("Registered.")
 	else:
 		print("Error registering to API...")
 	print("Starting API cache loop\n")
 	global cache_loop
 	cache_loop = asyncio.create_task(api.refresh_nodes())
-	print(f"Current info: {current_node.name}")
-	async with websockets.serve(handler, ADDR, PORT, compression=None, ping_interval=30): # Disable compression at cost of network bandwidth
+	print(f"Current info: {current_node.name}")														 # NOTE: May be too low, if so: set to 524288
+	async with websockets.serve(handler, config.ip, config.port, compression=None, ping_interval=30, max_size=262144): # Disable compression at cost of network bandwidth
 		await asyncio.Future()  # run forever
 
 def cleanup_before_exit():
