@@ -22,10 +22,9 @@ print("Connecting to DB")
 _db = logic.DBConn(db, secret) # Create the connection to the DB
 print("Connected")
 
-api = connection.ApiConnection(_db, config.api_url, secret, None)
-print(f"{api.get_node_addrs()} other nodes running")
 current_node = node.Node(f"{config.ip}:{config.port}", db=_db, hostname=config.hostname) # TODO: redirect to another node at limit.
-api.insert_node(current_node)
+api = connection.ApiConnection(_db, config.api_url, secret, current_node)
+print(f"{api.get_node_addrs()} other nodes running")
 
 async def handler(connection):
 	""" Handles a single WS connection. """
@@ -74,7 +73,7 @@ async def handler(connection):
 async def main():
 	print("\n-----    Started WS Server    -----.\n")
 	print("Registering to API")
-	if api.register_to_api(config.hostname, config.port) == True:
+	if api.register_to_api(config.hostname, config.port, config.hostname) == True:
 		print("Registered.")
 	else:
 		print("Error registering to API...")

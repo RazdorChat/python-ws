@@ -27,14 +27,10 @@ class ApiConnection:
 		self.node = node
 		self.redis = db.redis
 
-	def insert_node(self, node_object: object):
-		self.node = node_object
-
-	def register_to_api(self, addr: str, port: int):
+	def register_to_api(self, addr: str, port: int, hostname: str):
 		""" Adds the Node to the API's node list """
 		data = {
-			"name": self.node.name,
-			"hostname": self.node.hostname,
+			"hostname": hostname,
 			"id": self.node.id,
 			"addr": addr,
 			"port": port,
@@ -48,7 +44,6 @@ class ApiConnection:
 	def unregister_from_api(self):
 		""" Removes the Node from the API's node list"""
 		data = {
-			"name":  self.node.name,
 			"id": self.node.id,
 			"secret": self.secret
 		}
@@ -61,7 +56,6 @@ class ApiConnection:
 	def notify_at_limit(self):
 		""" Notifies the API that connection limit has been met (node has stopped accepting WS connections) """
 		data = {
-			"name":  self.node.name,
 			"id": self.node.id,
 			"secret": self.secret
 		}
