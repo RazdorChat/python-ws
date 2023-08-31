@@ -24,7 +24,7 @@ print("Connected")
 
 api = connection.ApiConnection(_db, config.api_url, secret, None)
 print(f"{api.get_node_addrs()} other nodes running")
-current_node = node.Node(f"{config.ip}:{config.port}", db=_db) # TODO: redirect to another node at limit.
+current_node = node.Node(f"{config.ip}:{config.port}", db=_db, config.hostname) # TODO: redirect to another node at limit.
 api.insert_node(current_node)
 
 async def handler(connection):
